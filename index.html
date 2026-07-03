@@ -171,8 +171,8 @@ html,body{margin:0;height:100%;font-family:system-ui,-apple-system,"Segoe UI",sa
  <header><h2 id="stitle">District</h2><p class="sub">Points noirs par nature</p></header>
  <div class="statnat" id="statnat"></div>
  <div class="axistoggle" id="axistoggle">
-   <button type="button" data-a="all">Tous</button>
-   <button type="button" data-a="grand" class="on">Grands axes</button>
+   <button type="button" data-a="all" class="on">Tous</button>
+   <button type="button" data-a="grand">Grands axes</button>
    <button type="button" data-a="sec">Axes secondaires</button>
  </div>
  <div class="total">
@@ -220,6 +220,7 @@ const PTS=[{"id":"PN-001","district":"OUJDA SIDI ZIANE","boulevard":"35 - Route 
 const DPAL={"SIDI YAHYA":"#e6194b","SIDI DRISS EL QADI":"#4363d8","OUED NACHEF SIDI MAAFA":"#3cb44b","OUJDA SIDI ZIANE":"#f58231"};
 const NPAL={"Propreté":"#e6194b","Éclairage Public":"#f5a623","Trottoirs":"#4363d8","Voiries":"#7b2ff7","Espace vert":"#3cb44b","Chiens errants":"#e07b00"};
 function ncolor(n){return NPAL[n]||"#6b7686";}
+PTS.forEach(p=>{if(p.nature==='Trottoir')p.nature='Trottoirs';});   // normalisation (données anciennes)
 
 // Chart.js plugin: draw % on each slice
 const pctPlugin={id:'pct',afterDatasetsDraw(c){
@@ -275,7 +276,7 @@ function padOpts(mz){
 const DORDER=GEO.districts.map(d=>d.name);
 let districtLayers={}, districtLabels={}, annexeLayers={};
 let pointMarkers=[];
-let current=null, natureState={}, chart=null, history=[], boulFilter=null, axisFilter='grand';
+let current=null, natureState={}, chart=null, history=[], boulFilter=null, axisFilter='all';
 function axisType(p){return (p.boulevard||'').trim()!==''?'grand':'sec';}
 function axisOk(p){return axisFilter==='all'||axisType(p)===axisFilter;}
 let secName={}, awCache={};
@@ -318,7 +319,7 @@ function backToDistrict(){
 function enterDistrict(name,natState,record){
   if(record!==false)pushHistory();
   boulFilter=null;
-  axisFilter='grand';syncAxisUI();
+  axisFilter='all';syncAxisUI();
   current=name;natureState=natState?JSON.parse(JSON.stringify(natState)):{};
   const col=DPAL[name]||"#888";
   GEO.districts.forEach(d=>{
@@ -501,9 +502,14 @@ function resolveSec(name){
   }).catch(()=>{});
 }
 function applyAxis(name){
-  drawPoints(name);loadBoulevards(name);buildStats(name);
+  drawPoints(name);loadBoulevards(name);buildNatureBar(name);buildStats(name);
   if(axisFilter==='sec'||axisFilter==='all'){
-    resolveSec(name).then(()=>{if(current===name){drawPoints(name);loadBoulevards(name);buildStats(name);}});
+    resolveSec(name).then(()=>{
+      if(current!==name)return;
+      buildStats(name);          // 1) compteur + listing d'abord
+      drawPoints(name);
+      setTimeout(()=>{if(current===name)loadBoulevards(name);},0);  // 2) traçage ensuite
+    });
   }
 }
 function driveId(u){const m=(u||'').match(/[-\w]{25,}/);return m?m[0]:null;}
@@ -651,8 +657,9 @@ function drawPoints(name){
 // Nature tabs — same .tab design/placement as districts
 function buildNatureBar(name){
   const bar=document.getElementById('naturebar');bar.innerHTML='';
-  const counts={};ptsOfDistrict(name).forEach(p=>counts[p.nature]=(counts[p.nature]||0)+1);
-  const natList=Object.keys(counts).sort((a,b)=>counts[b]-counts[a]);
+  const countsAll={};ptsOfDistrict(name).forEach(p=>countsAll[p.nature]=(countsAll[p.nature]||0)+1);
+  const counts={};ptsOfDistrict(name).filter(axisOk).forEach(p=>counts[p.nature]=(counts[p.nature]||0)+1);
+  const natList=Object.keys(countsAll).sort((a,b)=>(counts[b]||0)-(counts[a]||0));
   natList.forEach(nat=>{if(natureState[nat]===undefined)natureState[nat]=true;});
   function syncTabs(){
     [...bar.children].forEach(t=>t.classList.toggle('off',natureState[t.dataset.nat]===false));
@@ -660,7 +667,7 @@ function buildNatureBar(name){
   natList.forEach(nat=>{
     const c=ncolor(nat);
     const t=document.createElement('div');t.className='tab'+(natureState[nat]?'':' off');t.dataset.nat=nat;t.style.borderColor=c;
-    t.innerHTML=`<span class="dot" style="background:${c};border-radius:50%"></span>${nat}<span class="cnt">${counts[nat]}</span>`;
+    t.innerHTML=`<span class="dot" style="background:${c};border-radius:50%"></span>${nat}<span class="cnt">${counts[nat]||0}</span>`;
     t.onclick=()=>{
       const activeNow=natList.filter(n=>natureState[n]!==false);
       const isOnlyThis=activeNow.length===1&&activeNow[0]===nat;
@@ -681,7 +688,7 @@ function refreshReset(){}
 function buildStats(name){
   document.getElementById('stitle').textContent=name;
   const all=ptsOfDistrict(name);
-  const counts={};all.forEach(p=>counts[p.nature]=(counts[p.nature]||0)+1);
+  const counts={};all.filter(axisOk).forEach(p=>counts[p.nature]=(counts[p.nature]||0)+1);
   const natActive=all.filter(p=>natureState[p.nature]!==false&&axisOk(p));
   document.getElementById('stotal').textContent=natActive.length;
   const boulSet=new Set(natActive.map(p=>effBoul(p)).filter(Boolean));
