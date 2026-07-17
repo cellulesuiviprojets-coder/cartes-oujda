@@ -280,7 +280,8 @@ let current=null, natureState={}, chart=null, history=[], boulFilter=null, axisF
 function axisType(p){return (p.boulevard||'').trim()!==''?'grand':'sec';}
 function axisOk(p){return axisFilter==='all'||axisType(p)===axisFilter;}
 let secName={}, awCache={};
-function effBoul(p){return axisType(p)==='grand'?cleanBoulevard(p.boulevard):(secName[p.id]||'');}
+function isAutres(p){return String(p.boulevard||'').trim().toLowerCase()==='autres';}
+function effBoul(p){if(isAutres(p))return secName[p.id]||'Autres';return axisType(p)==='grand'?cleanBoulevard(p.boulevard):(secName[p.id]||'');}
 function dispBoul(nm){return String(nm).toLowerCase()==='autres'?'Autres boulevards':nm;}
 function snap(){return {district:current,natureState:JSON.parse(JSON.stringify(natureState)),boulFilter:boulFilter};}
 function pushHistory(){history.push(snap());}
@@ -355,6 +356,7 @@ function enterDistrict(name,natState,record){
   buildNatureBar(name);
   setBurger('N');
   buildStats(name);
+  resolveAutres(name);
 }
 function shade(hex,p){let n=parseInt(hex.slice(1),16),r=(n>>16)+p,g=((n>>8)&255)+p,b=(n&255)+p;
  r=Math.max(0,Math.min(255,r));g=Math.max(0,Math.min(255,g));b=Math.max(0,Math.min(255,b));
@@ -445,8 +447,8 @@ function drawTraceWay(g,label){
 function loadBoulevards(name){
   clearBoulevards();
   const pts=ptsOfDistrict(name).filter(p=>natureState[p.nature]!==false&&axisOk(p));
-  const grandNames=[...new Set(pts.filter(p=>axisType(p)==='grand').map(p=>searchName(p.boulevard)).filter(Boolean))];
-  const secNms=[...new Set(pts.filter(p=>axisType(p)==='sec').map(p=>secName[p.id]).filter(Boolean))];
+  const grandNames=[...new Set(pts.filter(p=>axisType(p)==='grand'&&!isAutres(p)).map(p=>searchName(p.boulevard)).filter(Boolean))];
+  const secNms=[...new Set(pts.filter(p=>axisType(p)==='sec'||isAutres(p)).map(p=>secName[p.id]).filter(Boolean))];
   const myReq=boulReq;
   const drawEls=(elts)=>{
     if(current!==name||myReq!==boulReq)return;
@@ -499,6 +501,16 @@ function resolveSec(name){
   if(!pend.length)return Promise.resolve();
   return fetchAllWays(name).then(ways=>{
     pend.forEach(p=>{const nm=nearestWayName([p.lat,p.lng],ways);if(nm)secName[p.id]=nm;});
+  }).catch(()=>{});
+}
+// Résout le nom de rue (via OSM) des points "Autres" à l'entrée du district, puis re-trace.
+function resolveAutres(name){
+  const pend=ptsOfDistrict(name).filter(p=>isAutres(p)&&p.lat!=null&&!secName[p.id]);
+  if(!pend.length)return;
+  fetchAllWays(name).then(ways=>{
+    pend.forEach(p=>{const nm=nearestWayName([p.lat,p.lng],ways);if(nm)secName[p.id]=nm;});
+    if(current!==name)return;
+    buildStats(name);drawPoints(name);loadBoulevards(name);
   }).catch(()=>{});
 }
 function applyAxis(name){
