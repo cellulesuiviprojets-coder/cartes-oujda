@@ -116,17 +116,36 @@ html,body{margin:0;height:100%;font-family:system-ui,-apple-system,"Segoe UI",sa
 @keyframes spin{to{transform:rotate(360deg)}}
 /* ---- Géolocalisation ---- */
 #geoloc-wrap{position:fixed;right:14px;bottom:16px;z-index:2350;display:flex;flex-direction:column;gap:10px;align-items:flex-end}
+.cs-crosshair{width:26px;height:26px;position:relative}
+.cs-crosshair::before,.cs-crosshair::after{content:'';position:absolute;background:#1c2430}
+.cs-crosshair::before{left:50%;top:0;bottom:0;width:2px;margin-left:-1px}
+.cs-crosshair::after{top:50%;left:0;right:0;height:2px;margin-top:-1px}
+.cs-crosshair .ring{position:absolute;inset:3px;border:2px solid #1c2430;border-radius:50%;background:rgba(28,36,48,.08);
+  animation:cspulse 1.6s ease-out infinite}
+@keyframes cspulse{0%{transform:scale(.6);opacity:1}100%{transform:scale(1.8);opacity:0}}
 .csearch-panel{position:absolute;bottom:calc(100% + 10px);right:0;background:#fff;border-radius:14px;
-  box-shadow:0 10px 30px rgba(20,30,45,.28);padding:12px;width:230px}
+  box-shadow:0 10px 30px rgba(20,30,45,.28);padding:12px;width:250px}
+.cs-modes{display:flex;gap:4px;background:var(--bg);border-radius:12px;padding:3px;margin-bottom:9px}
+.cs-mode{flex:1;border:none;background:transparent;padding:6px 4px;font-size:10.5px;font-weight:700;
+  color:#5b6b7b;cursor:pointer;border-radius:9px;white-space:nowrap;font-family:inherit}
+.cs-mode.on{background:#fff;color:var(--accent);box-shadow:0 1px 4px rgba(20,30,45,.14)}
 .csearch-panel input{width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--line);
   border-radius:10px;font-size:13px;margin-bottom:8px;font-family:inherit}
 .csearch-panel .cs-go{width:100%;padding:8px;border:none;border-radius:10px;background:var(--accent);
   color:#fff;font-weight:700;cursor:pointer;font-size:13px}
-.csearch-result{margin-top:10px;font-size:12.5px;font-weight:600;color:#334;line-height:1.5}
+.csearch-result{margin-top:10px;font-size:12.5px;font-weight:600;color:#334;line-height:1.5;
+  max-height:260px;overflow-y:auto}
 .csearch-result .pill{display:inline-flex;align-items:center;gap:6px;padding:4px 11px;border-radius:14px;
   color:#fff;font-weight:700;margin-bottom:6px}
 .csearch-result .cs-enter{margin-top:6px;width:100%;padding:6px;border:none;border-radius:9px;
   background:var(--bg);color:var(--accent);font-weight:700;cursor:pointer;font-size:12px}
+.cs-hit{display:flex;align-items:center;gap:8px;padding:6px 4px;border-bottom:1px solid #f0f2f5;
+  cursor:pointer;border-radius:8px}
+.cs-hit:hover{background:var(--bg)}
+.cs-hit .dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto}
+.cs-hit .txt{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:#334}
+.cs-hit .sub{display:block;font-size:10.5px;font-weight:600;color:#8a96a3}
+.cs-count{font-size:11px;color:#8a96a3;font-weight:700;margin-bottom:4px}
 .geo-btn{width:46px;height:46px;border-radius:50%;border:none;background:#fff;box-shadow:0 4px 16px rgba(20,30,45,.28);
  font-size:19px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#1c2430;transition:background .15s,color .15s,transform .1s}
 .geo-btn:active{transform:scale(.94)}
@@ -147,6 +166,8 @@ html,body{margin:0;height:100%;font-family:system-ui,-apple-system,"Segoe UI",sa
   #geoloc-wrap{right:8px;bottom:10px;z-index:2350}
   .geo-btn{width:42px;height:42px;font-size:17px}
   .geo-btn.follow{width:34px;height:34px;font-size:14px}
+  /* Loi de Fitts : cible tactile plus généreuse pour la recherche sur petit écran */
+  #csearch-btn{width:48px;height:48px;font-size:19px}
 }
 @media (max-width:680px){
   /* Panneaux (stats + fiche) en feuille du bas glissable */
@@ -232,8 +253,13 @@ html,body{margin:0;height:100%;font-family:system-ui,-apple-system,"Segoe UI",sa
 <div id="geoloc-wrap">
   <button id="csearch-btn" class="geo-btn" type="button" title="Chercher des coordonnées">🔍</button>
   <div id="csearch-panel" class="csearch-panel" style="display:none">
+    <div class="cs-modes">
+      <button type="button" class="cs-mode on" data-mode="coord">Coordonnées</button>
+      <button type="button" class="cs-mode" data-mode="boul">Boulevard</button>
+      <button type="button" class="cs-mode" data-mode="etab">Établissement</button>
+    </div>
     <input id="csearch-input" type="text" placeholder="34.688, -1.896 ou lien Maps">
-    <button id="csearch-go" class="cs-go" type="button">Chercher le district</button>
+    <button id="csearch-go" class="cs-go" type="button">Chercher</button>
     <div id="csearch-result" class="csearch-result"></div>
   </div>
   <button id="geo-follow-btn" class="geo-btn follow" type="button" title="Suivre ma position" style="display:none">🎯</button>
@@ -290,8 +316,52 @@ function parseLatLng(text){
   const input=document.getElementById('csearch-input');
   const goBtn=document.getElementById('csearch-go');
   const resultEl=document.getElementById('csearch-result');
+  const modeBtns=[...document.querySelectorAll('.cs-mode')];
+  let mode='coord';
   let marker=null;
-  function runSearch(){
+
+  const PLACEHOLDERS={
+    coord:'34.688, -1.896 ou lien Maps',
+    boul:'Ex: Boulevard Hassan II',
+    etab:'Ex: École Mohammed V'
+  };
+  const LABELS={coord:'Chercher',boul:'Chercher ce boulevard',etab:"Chercher cet établissement"};
+
+  function haversineM(lat1,lng1,lat2,lng2){
+    const R=6371000,toRad=x=>x*Math.PI/180;
+    const dLat=toRad(lat2-lat1),dLng=toRad(lng2-lng1);
+    const a=Math.sin(dLat/2)**2+Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLng/2)**2;
+    return 2*R*Math.asin(Math.sqrt(a));
+  }
+  // Tous les points existants à moins de 35m des coordonnées saisies (jusqu'à 4, triés par distance)
+  function nearbyPoints(lat,lng,maxM,limit){
+    const hits=[];
+    for(const p of PTS){
+      if(p.lat==null)continue;
+      const d=haversineM(lat,lng,p.lat,p.lng);
+      if(d<=maxM)hits.push([p,d]);
+    }
+    hits.sort((a,b)=>a[1]-b[1]);
+    return hits.slice(0,limit);
+  }
+  function goToPoint(p){
+    // skipFit=true : on saute le zoom intermédiaire sur tout le district, pour aller
+    // directement et précisément sur le point recherché (un seul mouvement, pas deux).
+    if(marker){map.removeLayer(marker);marker=null;}
+    enterDistrict(p.district,undefined,true,true);
+    openPoint(p);
+    panel.style.display='none';
+  }
+  function hitRow(p,subLabel){
+    const c=ptColor(p);
+    const row=document.createElement('div');row.className='cs-hit';
+    row.innerHTML=`<span class="dot" style="background:${c}"></span>`+
+      `<span class="txt">${p.id} — ${p.nature}<span class="sub">${subLabel}</span></span>`;
+    row.onclick=()=>goToPoint(p);
+    return row;
+  }
+
+  function runCoordSearch(){
     const ll=parseLatLng(input.value);
     if(!ll){
       resultEl.innerHTML='<span style="color:#c62828">Format non reconnu — utilise "lat, lng" ou un lien Google Maps.</span>';
@@ -299,8 +369,25 @@ function parseLatLng(text){
     }
     const [lat,lng]=ll;
     if(marker){map.removeLayer(marker);marker=null;}
-    marker=L.circleMarker([lat,lng],{radius:8,color:'#fff',weight:2,fillColor:'#1c2430',fillOpacity:.9}).addTo(map);
+    marker=L.marker([lat,lng],{icon:L.divIcon({html:'<div class="cs-crosshair"><div class="ring"></div></div>',className:'',iconSize:[26,26],iconAnchor:[13,13]}),interactive:false}).addTo(map);
     map.setView([lat,lng],16);
+    // On attend la fin du zoom déclenché par la recherche elle-même avant d'armer
+    // l'auto-nettoyage — sinon notre propre zoom se déclenchait instantanément lui-même.
+    map.once('moveend',()=>{
+      map.once('click dragstart zoomstart',()=>{if(marker){map.removeLayer(marker);marker=null;}});
+    });
+
+    const hits=nearbyPoints(lat,lng,35,4);
+    if(hits.length){
+      resultEl.innerHTML='';
+      const count=document.createElement('div');count.className='cs-count';
+      count.textContent=hits.length>1?`${hits.length} points existent déjà ici :`:'Un point existe déjà ici :';
+      resultEl.appendChild(count);
+      hits.forEach(([p,dist])=>{
+        resultEl.appendChild(hitRow(p,`${Math.round(dist)} m — ${p.desc||p.district}`));
+      });
+      return;
+    }
     const dname=districtAtCoord(lat,lng);
     if(dname){
       const col=DPAL[dname]||'#888';
@@ -311,9 +398,147 @@ function parseLatLng(text){
       resultEl.innerHTML='<span style="color:#6b7686">Hors du territoire couvert (Oujda-Angad).</span>';
     }
   }
-  btn.onclick=()=>{panel.style.display=(panel.style.display==='none')?'block':'none';};
-  goBtn.onclick=runSearch;
-  input.addEventListener('keydown',e=>{if(e.key==='Enter')runSearch();});
+
+  // Ignore accents + espaces multiples/tabulations (fréquents dans les descriptions saisies à la main)
+  function normSpace(s){return normName(s);}
+  function runListSearch(field,subFn,explicit){
+    const q=normSpace(input.value);
+    if(!q){resultEl.innerHTML='<span style="color:#6b7686">Tape un nom pour lancer la recherche.</span>';return;}
+    doListSearch(field,subFn,explicit);
+  }
+  function doListSearch(field,subFn,explicit){
+    const q=normSpace(input.value);
+    const getField=field==='boulevard'?effBoul:(p=>p[field]);
+    const matches=PTS.filter(p=>p.lat!=null&&normSpace(getField(p)).includes(q));
+    if(!matches.length){
+      if(field==='boulevard'&&explicit&&!allBoulevardsResolved){
+        // Certains points n'ont pas de nom de rue enregistré tel quel — on le déduit d'abord
+        // via OSM (comme le fait déjà l'appli à l'ouverture d'un district), puis on recherche à nouveau.
+        resultEl.innerHTML='<span style="color:#6b7686">Résolution des noms de rues…</span>';
+        resolveAllBoulevards().then(()=>doListSearch(field,subFn,explicit));
+        return;
+      }
+      if(field==='boulevard'&&explicit){
+        resultEl.innerHTML='<span style="color:#6b7686">Aucun point noir signalé sur ce boulevard — recherche de son tracé…</span>';
+        searchBoulevardTrace(input.value.trim());
+      }else if(field==='boulevard'){
+        resultEl.innerHTML='<span style="color:#6b7686">Aucun point noir pour l\'instant — appuie sur Entrée pour chercher aussi le tracé de la route.</span>';
+      }else{
+        resultEl.innerHTML='<span style="color:#6b7686">Aucun résultat pour cette recherche.</span>';
+      }
+      return;
+    }
+    resultEl.innerHTML='';
+    const shown=matches.slice(0,30);
+    const count=document.createElement('div');count.className='cs-count';
+    count.textContent=matches.length>30?`${matches.length} résultats (30 premiers affichés)`:`${matches.length} résultat(s)`;
+    resultEl.appendChild(count);
+    // Regroupement par district (Loi de Miller) si plusieurs districts sont concernés
+    const districts=[...new Set(shown.map(p=>p.district))];
+    if(districts.length>1){
+      districts.forEach(d=>{
+        const head=document.createElement('div');head.className='cs-count';
+        head.style.marginTop='6px';head.style.color=DPAL[d]||'#334';
+        head.textContent=d;
+        resultEl.appendChild(head);
+        shown.filter(p=>p.district===d).forEach(p=>resultEl.appendChild(hitRow(p,subFn(p))));
+      });
+    }else{
+      shown.forEach(p=>resultEl.appendChild(hitRow(p,subFn(p))));
+    }
+    // On trace aussi le boulevard lui-même sur la carte (recherche explicite uniquement,
+    // pour ne pas spammer l'API OSM à chaque frappe pendant la recherche en direct).
+    if(field==='boulevard'&&explicit){
+      const raw=input.value.trim();
+      drawBoulevardTrace(raw).then(r=>{
+        const ptLLs=matches.filter(p=>p.lat!=null).map(p=>[p.lat,p.lng]);
+        const allLLs=ptLLs.concat(r.lls||[]);
+        if(allLLs.length)map.fitBounds(allLLs,padOpts(16));
+      });
+    }
+  }
+
+  // Aucun point noir sur ce boulevard -> on cherche quand même son tracé réel (OpenStreetMap),
+  // sur l'ensemble du territoire couvert (pas besoin d'être dans un district précis).
+  // Dessine le tracé OSM d'un boulevard sur la carte, sans toucher au panneau de résultats
+  // (utilisé aussi bien quand des points existent déjà que quand aucun n'est trouvé).
+  function drawBoulevardTrace(raw){
+    const nm=searchName(raw);
+    if(!nm)return Promise.resolve({ok:false,lls:[]});
+    const b=GEO.bbox;
+    const bbox=`${b.S},${b.W},${b.N},${b.E}`;
+    const q=`[out:json][timeout:25];way[highway][name~"${esc(nm)}",i](${bbox});out geom;`;
+    return overpass(q).then(d=>{
+      const elts=d.elements||[];
+      if(!elts.length)return {ok:false,lls:[]};
+      clearBoulevards();
+      const lls=[];
+      elts.forEach(w=>{
+        const g=w.geometry&&w.geometry.map(x=>[x.lat,x.lon]);
+        if(!g)return;
+        lls.push(...g);
+        boulevardLayers.push(L.polyline(g,{color:'#fff',weight:10,opacity:.95}).addTo(map));
+        const line=L.polyline(g,{color:'#ff2d2d',weight:5.5,opacity:1}).addTo(map);
+        line.bindTooltip((w.tags&&w.tags.name)||nm,{sticky:true});
+        boulevardLayers.push(line);
+      });
+      return {ok:true,lls};
+    }).catch(()=>({ok:false,lls:[],err:true}));
+  }
+  function searchBoulevardTrace(raw){
+    drawBoulevardTrace(raw).then(r=>{
+      if(r.err){resultEl.innerHTML='<span style="color:#c62828">Tracé indisponible (réseau) — réessaie.</span>';return;}
+      if(!r.ok){resultEl.innerHTML='<span style="color:#6b7686">Aucun boulevard ni point noir trouvé pour cette recherche.</span>';return;}
+      if(r.lls.length)map.fitBounds(r.lls,padOpts(16));
+      resultEl.innerHTML='<span style="color:#6b7686">Aucun point noir signalé sur ce boulevard pour l\'instant — voici son tracé sur la carte.</span>';
+    });
+  }
+
+  function runSearch(explicit){
+    if(mode==='coord')runCoordSearch();
+    else if(mode==='boul')runListSearch('boulevard',p=>p.district+(p.boulevard?' · '+dispBoul(p.boulevard):''),explicit);
+    else runListSearch('desc',p=>p.district+(p.boulevard?' · '+dispBoul(p.boulevard):''),explicit);
+  }
+  function setMode(m){
+    mode=m;
+    modeBtns.forEach(x=>x.classList.toggle('on',x.dataset.mode===m));
+    input.placeholder=PLACEHOLDERS[m];
+    goBtn.textContent=LABELS[m];
+  }
+
+  modeBtns.forEach(b=>{
+    b.onclick=()=>{
+      setMode(b.dataset.mode);
+      input.value='';resultEl.innerHTML='';
+      input.focus();
+    };
+  });
+  btn.onclick=()=>{
+    const opening=panel.style.display==='none';
+    panel.style.display=opening?'block':'none';
+    // En fermant le panneau, on efface le repère temporaire de recherche (pas un vrai point noir)
+    if(!opening&&marker){map.removeLayer(marker);marker=null;}
+    if(opening){input.focus();resolveAllBoulevards();} // préchargement discret en arrière-plan
+  };
+  goBtn.onclick=()=>runSearch(true);
+  input.addEventListener('keydown',e=>{
+    if(e.key==='Enter')runSearch(true);
+    if(e.key==='Escape'){panel.style.display='none';if(marker){map.removeLayer(marker);marker=null;}}
+  });
+  // Recherche en direct (Boulevard/Établissement) : pas besoin de cliquer "Chercher" à chaque frappe.
+  // Bascule automatique vers "Coordonnées" si le texte collé ressemble à des coordonnées/lien Maps
+  // (Loi de Hick : on évite à l'utilisateur de choisir le bon onglet lui-même).
+  let liveTimer=null;
+  input.addEventListener('input',()=>{
+    clearTimeout(liveTimer);
+    const val=input.value.trim();
+    if(mode!=='coord'&&parseLatLng(val)){setMode('coord');}
+    if(!val){resultEl.innerHTML='';return;}
+    liveTimer=setTimeout(()=>{
+      if(mode==='coord')return; // les coordonnées se cherchent explicitement (clic/Entrée), pas en direct
+      runSearch(false);
+    },350);
+  });
 })();
 function natKey(p){
   if(p.nature==='Environnement des écoles'){
@@ -453,7 +678,7 @@ function backToDistrict(){
   document.getElementById('stats').classList.add('show');
   if(current)map.fitBounds(districtLayers[current].getBounds(),padOpts(17));
 }
-function enterDistrict(name,natState,record){
+function enterDistrict(name,natState,record,skipFit){
   if(record!==false)pushHistory();
   boulFilter=null;
   schoolTypeFilter=null;
@@ -478,7 +703,9 @@ function enterDistrict(name,natState,record){
   });
   restyleBorders();
   // zoom max on the district, centered in the visible area (right panel + top tabs offset)
-  map.fitBounds(districtLayers[name].getBounds(),padOpts(17));
+  // — sauté (skipFit) quand on navigue directement vers un point précis, pour éviter
+  //   deux animations de zoom concurrentes qui se disputent la vue finale.
+  if(!skipFit)map.fitBounds(districtLayers[name].getBounds(),padOpts(17));
   drawPoints(name);
   loadBoulevards(name);
   prefetchDistrict(name);   // précharge en parallèle les autres natures/boulevards (arrière-plan)
@@ -644,13 +871,23 @@ function resolveSec(name){
 // Résout le nom de rue (via OSM) des points "Autres" à l'entrée du district, puis re-trace.
 function resolveAutres(name){
   const pend=ptsOfDistrict(name).filter(p=>isAutres(p)&&p.lat!=null&&!secName[p.id]);
-  if(!pend.length)return;
-  fetchAllWays(name).then(ways=>{
+  if(!pend.length)return Promise.resolve();
+  return fetchAllWays(name).then(ways=>{
     pend.forEach(p=>{const nm=nearestWayName([p.lat,p.lng],ways);if(nm)secName[p.id]=nm;});
     gsetCache={};
     if(current!==name)return;
     buildStats(name);drawPoints(name);loadBoulevards(name);
   }).catch(()=>{});
+}
+// Résout les noms de rue de TOUS les districts (utilisé par la recherche par boulevard,
+// pour retrouver aussi les points dont la rue n'est pas enregistrée telle quelle mais
+// déduite dynamiquement de la route OSM la plus proche).
+let allBoulevardsResolved=null;
+function resolveAllBoulevards(){
+  if(!allBoulevardsResolved){
+    allBoulevardsResolved=Promise.all(GEO.districts.map(d=>Promise.all([resolveSec(d.name),resolveAutres(d.name)])));
+  }
+  return allBoulevardsResolved;
 }
 function applyAxis(name){
   drawPoints(name);loadBoulevards(name);buildNatureBar(name);buildStats(name);
