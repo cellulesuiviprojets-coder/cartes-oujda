@@ -32,6 +32,7 @@ html,body{margin:0;height:100%;font-family:system-ui,-apple-system,"Segoe UI",sa
 #tabhost{display:contents}
 #burger,#drawerbg{display:none}
 .sheetgrab{display:none}
+.sheet-collapse-btn{display:none}
 .stats{position:absolute;top:14px;right:14px;bottom:14px;z-index:1000;width:316px;max-width:calc(100vw - 28px);
  background:#fff;border:1px solid var(--line);border-radius:16px;box-shadow:0 12px 34px rgba(20,30,45,.16);
  overflow:hidden;display:none;flex-direction:column}
@@ -123,8 +124,13 @@ html,body{margin:0;height:100%;font-family:system-ui,-apple-system,"Segoe UI",sa
 .cs-crosshair .ring{position:absolute;inset:3px;border:2px solid #1c2430;border-radius:50%;background:rgba(28,36,48,.08);
   animation:cspulse 1.6s ease-out infinite}
 @keyframes cspulse{0%{transform:scale(.6);opacity:1}100%{transform:scale(1.8);opacity:0}}
-.csearch-panel{position:absolute;bottom:calc(100% + 10px);right:0;background:#fff;border-radius:14px;
+.csearch-panel{display:none;position:absolute;bottom:calc(100% + 10px);right:0;background:#fff;border-radius:14px;
   box-shadow:0 10px 30px rgba(20,30,45,.28);padding:12px;width:250px}
+.csearch-panel.show{display:block}
+.cs-sheetgrab{display:none}
+.cs-close{display:none;position:absolute;top:8px;right:8px;width:28px;height:28px;border:none;
+  border-radius:50%;background:var(--bg);color:#5b6b7b;font-size:14px;cursor:pointer;
+  align-items:center;justify-content:center;font-family:inherit}
 .cs-modes{display:flex;gap:4px;background:var(--bg);border-radius:12px;padding:3px;margin-bottom:9px}
 .cs-mode{flex:1;border:none;background:transparent;padding:6px 4px;font-size:10.5px;font-weight:700;
   color:#5b6b7b;cursor:pointer;border-radius:9px;white-space:nowrap;font-family:inherit}
@@ -168,6 +174,24 @@ html,body{margin:0;height:100%;font-family:system-ui,-apple-system,"Segoe UI",sa
   .geo-btn.follow{width:34px;height:34px;font-size:14px}
   /* Loi de Fitts : cible tactile plus généreuse pour la recherche sur petit écran */
   #csearch-btn{width:48px;height:48px;font-size:19px}
+  /* Loi de Jakob : le panneau devient une feuille du bas, comme les fiches district/point
+     déjà connues dans l'app — plus pratique à atteindre au pouce qu'un popover flottant. */
+  .csearch-panel{position:fixed;left:6px;right:6px;bottom:6px;top:auto;width:auto;
+    max-height:70vh;border-radius:18px 18px 16px 16px;padding:10px 14px 14px}
+  .csearch-panel.show{display:flex;flex-direction:column}
+  .cs-sheetgrab{display:block;padding:2px 0 8px;cursor:grab;flex:0 0 auto}
+  .cs-sheetgrab span{display:block;width:44px;height:5px;border-radius:3px;background:#c7ced6;margin:0 auto}
+  .cs-close{display:flex;top:10px;right:12px;width:32px;height:32px;font-size:15px}
+  .cs-modes{margin-bottom:11px;flex:0 0 auto}
+  .cs-mode{font-size:13px;padding:10px 4px}
+  /* Champ ≥16px : évite le zoom automatique de Safari/Chrome mobile au focus d'un input */
+  .csearch-panel input{font-size:16px;padding:12px 12px;margin-bottom:10px;flex:0 0 auto}
+  .csearch-panel .cs-go{padding:12px;font-size:14.5px;flex:0 0 auto}
+  .csearch-result{max-height:none;flex:1 1 auto;overflow-y:auto;font-size:13.5px}
+  .cs-hit{padding:9px 4px}
+  /* Le bandeau de changement de district descend sous la rangée burger/Plan-Satellite,
+     pour ne plus jamais la recouvrir. */
+  #geotoast{top:62px;max-width:calc(100vw - 100px)}
 }
 @media (max-width:680px){
   /* Panneaux (stats + fiche) en feuille du bas glissable */
@@ -180,6 +204,17 @@ html,body{margin:0;height:100%;font-family:system-ui,-apple-system,"Segoe UI",sa
   .stats .total .n{font-size:24px}
   .statnat{padding:8px 18px 0}
   .sheetgrab{display:block;padding:8px 0 2px;cursor:grab;touch-action:none}
+  /* Bouton replier explicite, dans l'en-tête (alternative visible au glisser de la poignée) */
+  .stats header{position:relative}
+  .sheet-collapse-btn{display:flex;position:absolute;top:14px;right:14px;width:28px;height:28px;
+    border:none;border-radius:50%;background:rgba(255,255,255,.22);color:#fff;font-size:16px;
+    align-items:center;justify-content:center;cursor:pointer;transition:transform .2s}
+  .stats.peek .sheet-collapse-btn{transform:rotate(180deg)}
+  /* État "replié" : ne garde que le titre + la poignée visibles, libère l'écran pour la carte */
+  .stats.peek .body,.stats.peek .dbody,.stats.peek .total,.stats.peek .chartwrap,.stats.peek .statnat,
+  .stats.peek .axistoggle,.stats.peek .schooltoggle{display:none!important}
+  .stats.peek header{padding-bottom:10px}
+  .stats.peek .sub{display:none}
   .sheetgrab span{display:block;width:44px;height:5px;border-radius:3px;background:#c7ced6;margin:0 auto}
   /* Fond de carte : haut droite, toujours visible */
   #baseswitch{top:10px;right:8px;left:auto;bottom:auto;z-index:2300}
@@ -228,7 +263,7 @@ html,body{margin:0;height:100%;font-family:system-ui,-apple-system,"Segoe UI",sa
 </div>
 <div class="stats" id="stats">
  <div class="sheetgrab"><span></span></div>
- <header><h2 id="stitle">District</h2><p class="sub">Points noirs par nature</p></header>
+ <header><button type="button" class="sheet-collapse-btn" aria-label="Replier">⌄</button><h2 id="stitle">District</h2><p class="sub">Points noirs par nature</p></header>
  <div class="statnat" id="statnat"></div>
  <div class="axistoggle" id="axistoggle">
    <button type="button" data-a="all" class="on">Tous</button>
@@ -244,7 +279,7 @@ html,body{margin:0;height:100%;font-family:system-ui,-apple-system,"Segoe UI",sa
 </div>
 <div class="stats" id="detail">
  <div class="sheetgrab"><span></span></div>
- <header><h2 id="dtitle">Point noir</h2><p class="sub" id="dsub">Détail</p></header>
+ <header><button type="button" class="sheet-collapse-btn" aria-label="Replier">⌄</button><h2 id="dtitle">Point noir</h2><p class="sub" id="dsub">Détail</p></header>
  <div class="dbody" id="dbody"></div>
 </div>
 <div class="hint" id="hint">Clique sur une étiquette de district pour l'explorer</div>
@@ -252,7 +287,9 @@ html,body{margin:0;height:100%;font-family:system-ui,-apple-system,"Segoe UI",sa
 <div id="baseswitch"><button type="button" class="bs on" data-l="osm">Plan</button><button type="button" class="bs" data-l="sat">Satellite</button></div>
 <div id="geoloc-wrap">
   <button id="csearch-btn" class="geo-btn" type="button" title="Chercher des coordonnées">🔍</button>
-  <div id="csearch-panel" class="csearch-panel" style="display:none">
+  <div id="csearch-panel" class="csearch-panel">
+    <div class="cs-sheetgrab"><span></span></div>
+    <button id="csearch-close" type="button" class="cs-close" aria-label="Fermer">✕</button>
     <div class="cs-modes">
       <button type="button" class="cs-mode on" data-mode="coord">Coordonnées</button>
       <button type="button" class="cs-mode" data-mode="boul">Boulevard</button>
@@ -262,7 +299,7 @@ html,body{margin:0;height:100%;font-family:system-ui,-apple-system,"Segoe UI",sa
     <button id="csearch-go" class="cs-go" type="button">Chercher</button>
     <div id="csearch-result" class="csearch-result"></div>
   </div>
-  <button id="geo-follow-btn" class="geo-btn follow" type="button" title="Suivre ma position" style="display:none">🎯</button>
+  <button id="geo-follow-btn" class="geo-btn follow" type="button" title="Suivre mon trajet" style="display:none">🎯</button>
   <button id="geo-btn" class="geo-btn" type="button" title="Me localiser">📍</button>
 </div>
 <div id="geotoast"></div>
@@ -313,6 +350,7 @@ function parseLatLng(text){
 (function(){
   const btn=document.getElementById('csearch-btn');
   const panel=document.getElementById('csearch-panel');
+  const closeBtn=document.getElementById('csearch-close');
   const input=document.getElementById('csearch-input');
   const goBtn=document.getElementById('csearch-go');
   const resultEl=document.getElementById('csearch-result');
@@ -350,7 +388,7 @@ function parseLatLng(text){
     if(marker){map.removeLayer(marker);marker=null;}
     enterDistrict(p.district,undefined,true,true);
     openPoint(p);
-    panel.style.display='none';
+    panel.classList.remove('show');
   }
   function hitRow(p,subLabel){
     const c=ptColor(p);
@@ -393,7 +431,7 @@ function parseLatLng(text){
       const col=DPAL[dname]||'#888';
       resultEl.innerHTML=`<span class="pill" style="background:${col}">${dname}</span><br>`+
         `<button class="cs-enter" type="button">Ouvrir ce district</button>`;
-      resultEl.querySelector('.cs-enter').onclick=()=>{enterDistrict(dname);panel.style.display='none';};
+      resultEl.querySelector('.cs-enter').onclick=()=>{enterDistrict(dname);panel.classList.remove('show');};
     }else{
       resultEl.innerHTML='<span style="color:#6b7686">Hors du territoire couvert (Oujda-Angad).</span>';
     }
@@ -513,17 +551,26 @@ function parseLatLng(text){
       input.focus();
     };
   });
-  btn.onclick=()=>{
-    const opening=panel.style.display==='none';
-    panel.style.display=opening?'block':'none';
+  function closePanel(){
+    panel.classList.remove('show');
     // En fermant le panneau, on efface le repère temporaire de recherche (pas un vrai point noir)
-    if(!opening&&marker){map.removeLayer(marker);marker=null;}
-    if(opening){input.focus();resolveAllBoulevards();} // préchargement discret en arrière-plan
+    if(marker){map.removeLayer(marker);marker=null;}
+  }
+  btn.onclick=()=>{
+    const opening=!panel.classList.contains('show');
+    if(opening){
+      panel.classList.add('show');
+      input.focus();
+      resolveAllBoulevards(); // préchargement discret en arrière-plan
+    }else{
+      closePanel();
+    }
   };
+  closeBtn.onclick=closePanel;
   goBtn.onclick=()=>runSearch(true);
   input.addEventListener('keydown',e=>{
     if(e.key==='Enter')runSearch(true);
-    if(e.key==='Escape'){panel.style.display='none';if(marker){map.removeLayer(marker);marker=null;}}
+    if(e.key==='Escape')closePanel();
   });
   // Recherche en direct (Boulevard/Établissement) : pas besoin de cliquer "Chercher" à chaque frappe.
   // Bascule automatique vers "Coordonnées" si le texte collé ressemble à des coordonnées/lien Maps
@@ -1226,18 +1273,70 @@ function setBurger(l){const b=document.getElementById('blabel');if(b)b.textConte
 drawerbg.onclick=closeDrawer;
 tabhost.addEventListener('click',e=>{if(e.target.closest('.tab'))closeDrawer();});
 
-// ---- Feuille du bas glissable (mobile) : tirer vers le haut pour agrandir ----
+// ---- Feuille du bas glissable (mobile) : tirer vers le haut/bas, 3 tailles (repliée/moyenne/grande) ----
 function makeSheetDraggable(sheet){
   const grab=sheet.querySelector('.sheetgrab');if(!grab)return;
-  let sy=0,sh=0,drag=false;
-  const clamp=h=>Math.max(window.innerHeight*0.22,Math.min(window.innerHeight*0.9,h));
-  grab.addEventListener('pointerdown',e=>{drag=true;sy=e.clientY;sh=sheet.getBoundingClientRect().height;sheet.style.transition='none';try{grab.setPointerCapture(e.pointerId);}catch(_){}});
-  grab.addEventListener('pointermove',e=>{if(!drag)return;const h=clamp(sh+(sy-e.clientY));sheet.style.height=h+'px';sheet.style.maxHeight=h+'px';});
-  const end=()=>{if(!drag)return;drag=false;sheet.style.transition='';const h=sheet.getBoundingClientRect().height;const big=h>window.innerHeight*0.52;const t=Math.round((big?0.86:0.40)*window.innerHeight);sheet.style.height=t+'px';sheet.style.maxHeight=t+'px';};
+  let sy=0,sh=0,drag=false,moved=false;
+  const PEEK=84; // hauteur repliée (juste le titre) — libère presque tout l'écran pour la carte
+  let lastExpanded=Math.round(0.40*window.innerHeight); // taille à laquelle revenir en dépliant
+  const clamp=h=>Math.max(PEEK,Math.min(window.innerHeight*0.9,h));
+  const snapTo=h=>{
+    // On ne fixe que la hauteur MAXIMALE : la hauteur réelle s'adapte au contenu
+    // (évite un grand vide blanc quand un filtre réduit fortement le contenu affiché).
+    sheet.style.height='';
+    sheet.style.maxHeight=h+'px';
+    const isPeek=h<=PEEK+20;
+    sheet.classList.toggle('peek',isPeek);
+    if(!isPeek)lastExpanded=h;
+  };
+  sheet._snapTo=snapTo;sheet._peekHeight=PEEK;
+  // Bouton ⌄ explicite dans l'en-tête : replier/déplier sans avoir à glisser la poignée
+  const collapseBtn=sheet.querySelector('.sheet-collapse-btn');
+  if(collapseBtn)collapseBtn.onclick=()=>{
+    sheet.style.transition='';
+    snapTo(sheet.classList.contains('peek')?lastExpanded:PEEK);
+  };
+  grab.addEventListener('pointerdown',e=>{drag=true;moved=false;sy=e.clientY;sh=sheet.getBoundingClientRect().height;sheet.style.transition='none';try{grab.setPointerCapture(e.pointerId);}catch(_){}});
+  grab.addEventListener('pointermove',e=>{
+    if(!drag)return;
+    if(Math.abs(sy-e.clientY)>6)moved=true;
+    const h=clamp(sh+(sy-e.clientY));
+    sheet.style.height=h+'px';sheet.style.maxHeight=h+'px';
+    sheet.classList.toggle('peek',h<=PEEK+20);
+  });
+  const end=()=>{
+    if(!drag)return;drag=false;sheet.style.transition='';
+    if(!moved){
+      // Simple tap sur la poignée : bascule rapide repliée <-> taille moyenne
+      const wasPeek=sheet.classList.contains('peek');
+      snapTo(wasPeek?Math.round(0.40*window.innerHeight):PEEK);
+      return;
+    }
+    const h=sheet.getBoundingClientRect().height;
+    const small=window.innerHeight*0.40,big=window.innerHeight*0.86;
+    let t;
+    if(h<(PEEK+small)/2)t=PEEK;
+    else if(h<(small+big)/2)t=Math.round(small);
+    else t=Math.round(big);
+    snapTo(t);
+  };
   grab.addEventListener('pointerup',end);grab.addEventListener('pointercancel',end);
 }
 makeSheetDraggable(document.getElementById('stats'));
 makeSheetDraggable(document.getElementById('detail'));
+// Auto-repli (mobile) : dès que l'utilisateur déplace lui-même la carte (glisser tactile),
+// on replie la fiche du bas pour libérer l'écran — comme Google Maps/Waze. 'dragstart' ne se
+// déclenche que sur une vraie interaction utilisateur, jamais sur nos propres fitBounds/setView.
+map.on('dragstart',()=>{
+  if(window.innerWidth>680)return;
+  ['stats','detail'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el.classList.contains('show')&&!el.classList.contains('peek')&&el._snapTo){
+      el.style.transition='';
+      el._snapTo(el._peekHeight);
+    }
+  });
+});
 
 let _rz;
 window.addEventListener('resize',()=>{clearTimeout(_rz);_rz=setTimeout(()=>{
@@ -1299,7 +1398,7 @@ drawAll();buildTabs();
 
   // -- État --
   let watchId=null, geoMarker=null, geoCircle=null, geoTrail=null;
-  let trailPts=[], lastDistrict=undefined, followMode=false, firstFix=true;
+  let trailPts=[], lastDistrict=undefined, trailMode=false, firstFix=true;
   const alerted=new Set();
   const PROX_M=150; // seuil d'alerte de proximité (mètres)
 
@@ -1325,21 +1424,26 @@ drawAll();buildTabs();
       geoCircle.setRadius(accuracy||20);
     }
 
-    // Tracé du trajet (on n'ajoute un point que si on a bougé d'au moins ~8m, pour lisser le bruit GPS)
-    const lastPt=trailPts[trailPts.length-1];
-    if(!lastPt||haversine(lastPt[0],lastPt[1],lat,lng)>8){
-      trailPts.push([lat,lng]);
-      if(!geoTrail)geoTrail=L.polyline(trailPts,{color:'#1a73e8',weight:4,opacity:.55}).addTo(map);
-      else geoTrail.setLatLngs(trailPts);
+    // Tracé du trajet : uniquement si "Suivre mon trajet" est activé (bouton séparé de la
+    // localisation elle-même). On n'ajoute un point que si on a bougé d'au moins ~8m,
+    // pour lisser le bruit GPS.
+    if(trailMode){
+      const lastPt=trailPts[trailPts.length-1];
+      if(!lastPt||haversine(lastPt[0],lastPt[1],lat,lng)>8){
+        trailPts.push([lat,lng]);
+        if(!geoTrail)geoTrail=L.polyline(trailPts,{color:'#1a73e8',weight:4,opacity:.55}).addTo(map);
+        else geoTrail.setLatLngs(trailPts);
+      }
     }
 
-    // Recentrage : toujours au premier fix, ensuite seulement si "suivre" est actif
+    // Le bouton "Me localiser" ne fait que la localisation réelle : recentrage une seule
+    // fois au premier repérage, puis le marqueur se contente de suivre ta position en direct
+    // sans plus jamais recentrer automatiquement la caméra.
     if(firstFix){
       map.setView([lat,lng],17);firstFix=false;
       geoBtn.disabled=false;geoBtn.textContent='🛑';geoBtn.classList.add('on');geoBtn.title='Arrêter la localisation';
       followBtn.style.display='flex';
     }
-    else if(followMode){map.panTo([lat,lng]);}
 
     // Détection du district courant
     const d=findDistrictAt(lat,lng);
@@ -1385,16 +1489,22 @@ drawAll();buildTabs();
   function stopTracking(){
     if(watchId!=null){navigator.geolocation.clearWatch(watchId);watchId=null;}
     geoBtn.disabled=false;geoBtn.textContent='📍';geoBtn.classList.remove('on');geoBtn.title='Me localiser';
-    followBtn.style.display='none';followBtn.classList.remove('on');followMode=false;
+    followBtn.style.display='none';followBtn.classList.remove('on');trailMode=false;
     if(geoMarker){map.removeLayer(geoMarker);geoMarker=null;}
     if(geoCircle){map.removeLayer(geoCircle);geoCircle=null;}
     if(geoTrail){map.removeLayer(geoTrail);geoTrail=null;}
   }
   geoBtn.onclick=()=>{watchId==null?startTracking():stopTracking();};
   followBtn.onclick=()=>{
-    followMode=!followMode;
-    followBtn.classList.toggle('on',followMode);
-    if(followMode&&geoMarker)map.panTo(geoMarker.getLatLng());
+    trailMode=!trailMode;
+    followBtn.classList.toggle('on',trailMode);
+    followBtn.title=trailMode?'Arrêter de suivre mon trajet':'Suivre mon trajet';
+    if(trailMode){
+      // Nouvelle trace : on repart d'une ligne vide à partir de maintenant
+      trailPts=[];
+      if(geoTrail){map.removeLayer(geoTrail);geoTrail=null;}
+    }
+    // Si désactivé, la ligne déjà tracée reste visible ; elle s'arrête juste de s'allonger.
   };
 
   // -- Positionnement dynamique : le bouton flotte toujours juste à côté/au-dessus
@@ -1408,14 +1518,17 @@ drawAll();buildTabs();
   }
   function refreshGeoWrapPos(){
     const mobile=window.innerWidth<=680;
-    const panel=activePanel();
     if(mobile){
-      geoWrap.style.top='';geoWrap.style.transform='';geoWrap.style.right='';
-      geoWrap.style.bottom=panel?(panel.getBoundingClientRect().height+14)+'px':'';
-    }else{
-      geoWrap.style.top='';geoWrap.style.transform='';geoWrap.style.bottom='';
-      geoWrap.style.right=panel?(panel.getBoundingClientRect().width+28)+'px':'';
+      // Sur mobile, position fixe sous le sélecteur Plan/Satellite — jamais dépendante
+      // de la hauteur de la fiche du bas, pour éviter que les boutons flottent "orphelins"
+      // au milieu de l'écran selon le contenu affiché.
+      geoWrap.style.top='58px';geoWrap.style.bottom='auto';
+      geoWrap.style.right='8px';geoWrap.style.transform='';
+      return;
     }
+    const panel=activePanel();
+    geoWrap.style.top='';geoWrap.style.transform='';geoWrap.style.bottom='';
+    geoWrap.style.right=panel?(panel.getBoundingClientRect().width+28)+'px':'';
   }
   const geoObs=new MutationObserver(refreshGeoWrapPos);
   ['stats','detail'].forEach(id=>{
